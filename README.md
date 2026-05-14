@@ -6,7 +6,7 @@ A minimal web-based ASCII dungeon crawler inspired by Soul Knight:
 - Infinite rooms: stepping onto `>` always generates the next room
 
 ## Run
-Open `/home/runner/work/ascii-art-game/ascii-art-game/index.html` in a browser.
+Open `./index.html` in a browser.
 
 ## Controls
 - Move: `WASD` or arrow keys
