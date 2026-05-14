@@ -77,6 +77,7 @@
     const MAX_PLACEMENT_TRIES = 2000;
     const MIN_SPAWN_X = 2;
     const SPAWN_WIDTH_DIVISOR = 3;
+    const ENEMY_SPAWN_DIVISOR = 3;
 
     const KEY_TO_MOVE = {
       arrowup: [0, -1],
@@ -158,9 +159,13 @@
       avoid = [],
       minDistance = 0
     } = {}) {
+      const safeMinX = Math.min(minX, maxX);
+      const safeMaxX = Math.max(minX, maxX);
+      const safeMinY = Math.min(minY, maxY);
+      const safeMaxY = Math.max(minY, maxY);
       for (let tries = 0; tries < MAX_PLACEMENT_TRIES; tries += 1) {
-        const x = randomInt(minX, maxX);
-        const y = randomInt(minY, maxY);
+        const x = randomInt(safeMinX, safeMaxX);
+        const y = randomInt(safeMinY, safeMaxY);
         if (!canWalk(x, y)) continue;
         if (isOccupied(x, y)) continue;
         if (avoid.some((spot) => getManhattanDistance(x, y, spot.x, spot.y) < minDistance)) {
@@ -168,7 +173,17 @@
         }
         return { x, y };
       }
-      return { x: minX, y: minY };
+      for (let y = safeMinY; y <= safeMaxY; y += 1) {
+        for (let x = safeMinX; x <= safeMaxX; x += 1) {
+          if (!canWalk(x, y)) continue;
+          if (isOccupied(x, y)) continue;
+          if (avoid.some((spot) => getManhattanDistance(x, y, spot.x, spot.y) < minDistance)) {
+            continue;
+          }
+          return { x, y };
+        }
+      }
+      return { x: safeMinX, y: safeMinY };
     }
 
     function clearExit() {
@@ -189,8 +204,9 @@
     }
 
     function placePlayer() {
-      const maxX = Math.max(MIN_SPAWN_X, Math.floor(game.map.width / SPAWN_WIDTH_DIVISOR));
-      const spawn = findOpenTile({ minX: 1, maxX });
+      const minX = 1;
+      const maxX = Math.max(minX, Math.max(MIN_SPAWN_X, Math.floor(game.map.width / SPAWN_WIDTH_DIVISOR)));
+      const spawn = findOpenTile({ minX, maxX });
       game.player.x = spawn.x;
       game.player.y = spawn.y;
     }
@@ -231,7 +247,7 @@
       }
       game.enemies = types.map((kind) => {
         const spawn = findOpenTile({
-          minX: Math.floor(game.map.width / 3),
+          minX: Math.floor(game.map.width / ENEMY_SPAWN_DIVISOR),
           avoid: [{ x: game.player.x, y: game.player.y }],
           minDistance: 3
         });
@@ -379,7 +395,7 @@
       for (const [sx, sy] of stepOptions) {
         const nx = enemy.x + sx;
         const ny = enemy.y + sy;
-        if (canWalk(nx, ny) && !enemyAt(nx, ny) && !(game.player.x === nx && game.player.y === ny)) {
+        if (canWalk(nx, ny) && !isOccupied(nx, ny)) {
           enemy.x = nx;
           enemy.y = ny;
           break;
@@ -449,7 +465,7 @@
       if (arrowKeys.every((key) => moveKeys.includes(key))) moveParts.push('Arrow Keys');
       const attackKeys = Array.from(ATTACK_KEYS).map((key) => key === ' ' ? 'Space' : key.toUpperCase());
       document.getElementById('controls').textContent =
-        `Move: ${moveParts.join('/')} • Fire laser: ${attackKeys.join('/')} (uses last move) • Aim and fire: I/J/K/L • Reach ${EXIT} to advance levels on the same floor.`;
+        `Move: ${moveParts.join('/')} • Fire laser: ${attackKeys.join('/')} (uses last move direction) • Aim and fire: I/J/K/L • Reach ${EXIT} to advance levels on the same floor.`;
     }
 
     window.addEventListener('keydown', (event) => {
