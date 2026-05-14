@@ -70,13 +70,13 @@
     const MIN_LEVELS_PER_FLOOR = 2;
     const MAX_LEVELS_PER_FLOOR = 4;
     const MAX_ENEMY_CAP = 10;
-    const ENEMY_DENSITY = 60;
+    const ENEMY_AREA_PER_SPAWN = 60;
     const OBSTACLE_DENSITY = 0.08;
     const PLAYER_MAX_HP = 8;
     const RANGED_COOLDOWN_TURNS = 3;
     const MAX_PLACEMENT_TRIES = 2000;
     const PLAYER_SPAWN_LIMIT_MIN_X = 2;
-    const SPAWN_LIMIT_DIVISOR = 3;
+    const SPAWN_WIDTH_DIVISOR = 3;
 
     const KEY_TO_MOVE = {
       arrowup: [0, -1],
@@ -103,7 +103,6 @@
 
     const game = {
       floor: 1,
-      level: 1,
       levelInFloor: 1,
       levelsPerFloor: 1,
       turn: 0,
@@ -215,7 +214,7 @@
 
     function placePlayer() {
       const minX = 1;
-      const spawnLimit = Math.max(PLAYER_SPAWN_LIMIT_MIN_X, Math.floor(game.map.width / SPAWN_LIMIT_DIVISOR));
+      const spawnLimit = Math.max(PLAYER_SPAWN_LIMIT_MIN_X, Math.floor(game.map.width / SPAWN_WIDTH_DIVISOR));
       const maxX = Math.max(minX, spawnLimit);
       const spawn = findOpenTile({ minX, maxX });
       game.player.x = spawn.x;
@@ -245,20 +244,15 @@
 
     function spawnEnemies() {
       const area = game.map.width * game.map.height;
-      const maxEnemies = Math.min(MAX_ENEMY_CAP, Math.max(2, Math.floor(area / ENEMY_DENSITY)));
-      const enemyCount = randomInt(1, maxEnemies);
-      const types = [];
-      if (enemyCount >= 2) {
-        types.push('melee', 'ranged');
-      } else {
-        types.push(Math.random() > 0.5 ? 'melee' : 'ranged');
-      }
+      const maxEnemies = Math.min(MAX_ENEMY_CAP, Math.max(2, Math.floor(area / ENEMY_AREA_PER_SPAWN)));
+      const enemyCount = randomInt(2, maxEnemies);
+      const types = ['melee', 'ranged'];
       while (types.length < enemyCount) {
         types.push(Math.random() > 0.5 ? 'melee' : 'ranged');
       }
       game.enemies = types.map((kind) => {
         const spawn = findOpenTile({
-          minX: Math.floor(game.map.width / SPAWN_LIMIT_DIVISOR),
+          minX: Math.floor(game.map.width / SPAWN_WIDTH_DIVISOR),
           avoid: [{ x: game.player.x, y: game.player.y }],
           minDistance: 3
         });
@@ -288,7 +282,6 @@
     }
 
     function advanceLevel() {
-      game.level += 1;
       if (game.levelInFloor < game.levelsPerFloor) {
         game.levelInFloor += 1;
         placeExit();
@@ -305,7 +298,6 @@
 
     function resetGame() {
       game.floor = 1;
-      game.level = 1;
       game.player.hp = PLAYER_MAX_HP;
       game.player.aim = [1, 0];
       generateFloor();
@@ -478,7 +470,7 @@
       if (arrowKeys.every((key) => moveKeys.includes(key))) moveParts.push('Arrow Keys');
       const attackKeys = Array.from(ATTACK_KEYS).map((key) => key === ' ' ? 'Space' : key.toUpperCase());
       document.getElementById('controls').textContent =
-        `Move: ${moveParts.join('/')} • Fire laser: ${attackKeys.join('/')} (uses last move direction) • Aim and fire: I/J/K/L • Reach ${EXIT} to clear levels; finishing all levels advances to the next floor.`;
+        `Move: ${moveParts.join('/')} • Fire laser: ${attackKeys.join('/')} (uses last move direction) • Aim+fire (one key): I/J/K/L • Reach ${EXIT} to clear levels; finishing all levels advances to the next floor.`;
     }
 
     window.addEventListener('keydown', (event) => {
