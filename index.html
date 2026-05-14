@@ -51,7 +51,7 @@
   <main>
     <div class="hud" id="hud"></div>
     <pre id="screen" aria-live="polite"></pre>
-    <div class="controls">Move: WASD/Arrow Keys • Attack (base weapon): Space/F • Entering <strong>&gt;</strong> generates the next room forever.</div>
+    <div class="controls" id="controls"></div>
   </main>
 
   <script>
@@ -79,7 +79,7 @@
       player: { x: 2, y: Math.floor(HEIGHT / 2), hp: 6 },
       weapon: { name: 'Starter Sword', damage: 1, range: 1 },
       enemy: null,
-      message: 'Find and slash the slime. Step on > to generate the next room.'
+      message: `Find and slash the slime. Step on ${EXIT} to generate the next room.`
     };
 
     function randomInt(min, max) {
@@ -142,7 +142,7 @@
         e.hp -= game.weapon.damage;
         if (e.hp <= 0) {
           game.enemy = null;
-          game.message = `${e.type} defeated. Move to > for the next infinite room.`;
+          game.message = `${e.type} defeated. Move to ${EXIT} for the next infinite room.`;
           render();
           return;
         }
@@ -198,6 +198,18 @@
       document.getElementById('screen').textContent = rows.join('\n') + `\n\n${game.message}`;
     }
 
+    function renderControls() {
+      const moveKeys = Object.keys(KEY_TO_MOVE);
+      const arrowKeys = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
+      const wasdKeys = ['w', 'a', 's', 'd'];
+      const moveParts = [];
+      if (wasdKeys.every((key) => moveKeys.includes(key))) moveParts.push('WASD');
+      if (arrowKeys.every((key) => moveKeys.includes(key))) moveParts.push('Arrow Keys');
+      const attackKeys = Array.from(ATTACK_KEYS).map((key) => key === ' ' ? 'Space' : key.toUpperCase());
+      document.getElementById('controls').textContent =
+        `Move: ${moveParts.join('/')} • Attack (base weapon): ${attackKeys.join('/')} • Entering ${EXIT} generates the next room forever.`;
+    }
+
     window.addEventListener('keydown', (event) => {
       const key = event.key.toLowerCase();
       if (HANDLED_KEYS.has(key)) {
@@ -212,6 +224,7 @@
     });
 
     generateFreshRoom();
+    renderControls();
     render();
   </script>
 </body>
