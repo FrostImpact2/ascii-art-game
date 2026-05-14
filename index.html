@@ -51,7 +51,7 @@
   <main>
     <div class="hud" id="hud"></div>
     <pre id="screen" aria-live="polite"></pre>
-    <div class="controls" aria-label="Game controls">Move: WASD/Arrow Keys • Attack (base weapon): Space/F • Entering <strong>&gt;</strong> generates the next room forever.</div>
+    <div class="controls">Move: WASD/Arrow Keys • Attack (base weapon): Space/F • Entering <strong>&gt;</strong> generates the next room forever.</div>
   </main>
 
   <script>
@@ -61,6 +61,18 @@
     const FLOOR = '.';
     const WALL = '#';
     const EXIT = '>';
+    const KEY_TO_MOVE = {
+      arrowup: [0, -1],
+      w: [0, -1],
+      arrowdown: [0, 1],
+      s: [0, 1],
+      arrowleft: [-1, 0],
+      a: [-1, 0],
+      arrowright: [1, 0],
+      d: [1, 0]
+    };
+    const ATTACK_KEYS = new Set([' ', 'f']);
+    const HANDLED_KEYS = new Set([...Object.keys(KEY_TO_MOVE), ...ATTACK_KEYS]);
 
     const game = {
       room: 1,
@@ -163,7 +175,7 @@
 
       const nextX = e.x + dx;
       const nextY = e.y + dy;
-      if (canWalk(nextX, nextY) && !(nextX === game.player.x && nextY === game.player.y)) {
+      if (canWalk(nextX, nextY)) {
         e.x = nextX;
         e.y = nextY;
       }
@@ -188,14 +200,14 @@
 
     window.addEventListener('keydown', (event) => {
       const key = event.key.toLowerCase();
-      if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd', ' ', 'f'].includes(key)) {
+      if (HANDLED_KEYS.has(key)) {
         event.preventDefault();
       }
-      if (key === 'arrowup' || key === 'w') return tryMove(0, -1);
-      if (key === 'arrowdown' || key === 's') return tryMove(0, 1);
-      if (key === 'arrowleft' || key === 'a') return tryMove(-1, 0);
-      if (key === 'arrowright' || key === 'd') return tryMove(1, 0);
-      if (key === ' ' || key === 'f') return attack();
+      if (KEY_TO_MOVE[key]) {
+        const [dx, dy] = KEY_TO_MOVE[key];
+        return tryMove(dx, dy);
+      }
+      if (ATTACK_KEYS.has(key)) return attack();
     });
 
     spawnRoom();
