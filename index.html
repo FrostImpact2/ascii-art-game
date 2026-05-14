@@ -51,12 +51,13 @@
   <main>
     <div class="hud" id="hud"></div>
     <pre id="screen" aria-live="polite"></pre>
-    <div class="controls">Move: WASD/Arrow Keys • Attack (base weapon): Space/F • Entering <strong>&gt;</strong> generates the next room forever.</div>
+    <div class="controls" aria-label="Game controls">Move: WASD/Arrow Keys • Attack (base weapon): Space/F • Entering <strong>&gt;</strong> generates the next room forever.</div>
   </main>
 
   <script>
     const WIDTH = 23;
     const HEIGHT = 13;
+    const MIN_ENEMY_SPAWN_X = Math.floor(WIDTH / 2);
     const FLOOR = '.';
     const WALL = '#';
     const EXIT = '>';
@@ -78,11 +79,15 @@
       game.player.y = Math.floor(HEIGHT / 2);
       game.enemy = {
         type: 'Slime',
-        x: randomInt(Math.floor(WIDTH / 2), WIDTH - 3),
+        x: randomInt(MIN_ENEMY_SPAWN_X, WIDTH - 3),
         y: randomInt(2, HEIGHT - 3),
         hp: 3,
         dmg: 1
       };
+    }
+
+    function getManhattanDistance(ax, ay, bx, by) {
+      return Math.abs(ax - bx) + Math.abs(ay - by);
     }
 
     function tileAt(x, y) {
@@ -120,7 +125,7 @@
         render();
         return;
       }
-      const dist = Math.abs(game.player.x - e.x) + Math.abs(game.player.y - e.y);
+      const dist = getManhattanDistance(game.player.x, game.player.y, e.x, e.y);
       if (dist <= game.weapon.range) {
         e.hp -= game.weapon.damage;
         if (e.hp <= 0) {
@@ -142,7 +147,7 @@
       if (!e) return;
       const dx = Math.sign(game.player.x - e.x);
       const dy = Math.sign(game.player.y - e.y);
-      const adjacent = Math.abs(game.player.x - e.x) + Math.abs(game.player.y - e.y) === 1;
+      const adjacent = getManhattanDistance(game.player.x, game.player.y, e.x, e.y) === 1;
 
       if (adjacent) {
         game.player.hp -= e.dmg;
