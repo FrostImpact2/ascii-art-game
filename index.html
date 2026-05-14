@@ -72,11 +72,15 @@
     const MAX_ENEMY_CAP = 10;
     const ENEMY_AREA_PER_SPAWN = 60;
     const OBSTACLE_DENSITY = 0.08;
+    const MIN_OBSTACLE_COUNT = 3;
     const PLAYER_MAX_HP = 8;
     const RANGED_COOLDOWN_TURNS = 3;
+    const RANGED_SPAWN_PROBABILITY = 0.5;
     const MAX_PLACEMENT_TRIES = 2000;
     const PLAYER_SPAWN_LIMIT_MIN_X = 2;
     const SPAWN_WIDTH_DIVISOR = 3;
+    const EXIT_MIN_DISTANCE_DIVISOR = 3;
+    const MIN_ENEMY_SPAWN_DISTANCE = 3;
 
     const KEY_TO_MOVE = {
       arrowup: [0, -1],
@@ -126,6 +130,10 @@
       return Math.abs(ax - bx) + Math.abs(ay - by);
     }
 
+    function randomEnemyKind() {
+      return Math.random() < RANGED_SPAWN_PROBABILITY ? 'ranged' : 'melee';
+    }
+
     function isInsideMap(x, y) {
       return !!game.map && x >= 0 && y >= 0 && x < game.map.width && y < game.map.height;
     }
@@ -159,7 +167,8 @@
       minY = 1,
       maxY = game.map.height - 2,
       avoid = [],
-      minDistance = 0
+      minDistance = 0,
+      label = 'entity'
     } = {}) {
       const safeMinX = Math.min(minX, maxX);
       const safeMaxX = Math.max(minX, maxX);
@@ -192,7 +201,7 @@
           return { x, y };
         }
       }
-      throw new Error(`No open tiles available for placement on map (${game.map.width}x${game.map.height}).`);
+      throw new Error(`No open tiles available for ${label} placement on map (${game.map.width}x${game.map.height}).`);
     }
 
     function clearExit() {
@@ -207,23 +216,24 @@
       clearExit();
       const exitSpot = findOpenTile({
         avoid: [{ x: game.player.x, y: game.player.y }],
-        minDistance: Math.floor(game.map.width / 3)
+        minDistance: Math.floor(game.map.width / EXIT_MIN_DISTANCE_DIVISOR),
+        label: 'exit'
       });
       game.map.tiles[exitSpot.y][exitSpot.x] = EXIT;
     }
 
     function placePlayer() {
       const minX = 1;
-      const spawnLimit = Math.max(PLAYER_SPAWN_LIMIT_MIN_X, Math.floor(game.map.width / SPAWN_WIDTH_DIVISOR));
-      const maxX = Math.max(minX, spawnLimit);
-      const spawn = findOpenTile({ minX, maxX });
+      const playerSpawnMaxX = Math.max(PLAYER_SPAWN_LIMIT_MIN_X, Math.floor(game.map.width / SPAWN_WIDTH_DIVISOR));
+      const maxX = Math.max(minX, playerSpawnMaxX);
+      const spawn = findOpenTile({ minX, maxX, label: 'player' });
       game.player.x = spawn.x;
       game.player.y = spawn.y;
     }
 
     function placeObstacles() {
       const area = game.map.width * game.map.height;
-      const obstacleCount = Math.max(3, Math.floor(area * OBSTACLE_DENSITY));
+      const obstacleCount = Math.max(MIN_OBSTACLE_COUNT, Math.floor(area * OBSTACLE_DENSITY));
       let placed = 0;
       while (placed < obstacleCount) {
         const x = randomInt(1, game.map.width - 2);
@@ -248,13 +258,14 @@
       const enemyCount = randomInt(2, maxEnemies);
       const types = ['melee', 'ranged'];
       while (types.length < enemyCount) {
-        types.push(Math.random() > 0.5 ? 'melee' : 'ranged');
+        types.push(randomEnemyKind());
       }
       game.enemies = types.map((kind) => {
         const spawn = findOpenTile({
           minX: Math.floor(game.map.width / SPAWN_WIDTH_DIVISOR),
           avoid: [{ x: game.player.x, y: game.player.y }],
-          minDistance: 3
+          minDistance: MIN_ENEMY_SPAWN_DISTANCE,
+          label: 'enemy'
         });
         return {
           kind,
