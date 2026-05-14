@@ -77,6 +77,7 @@
     const RANGED_COOLDOWN_TURNS = 3;
     const RANGED_SPAWN_PROBABILITY = 0.5;
     const MAX_PLACEMENT_TRIES = 2000;
+    const MAX_OBSTACLE_PLACEMENT_TRIES = 5000;
     const PLAYER_SPAWN_LIMIT_MIN_X = 2;
     const SPAWN_WIDTH_DIVISOR = 3;
     const EXIT_MIN_DISTANCE_DIVISOR = 3;
@@ -201,7 +202,11 @@
           return { x, y };
         }
       }
-      throw new Error(`No open tiles available for ${label} placement on map (${game.map.width}x${game.map.height}).`);
+      const walkableTiles = game.map.tiles.flat().filter((tile) => tile === FLOOR || tile === EXIT).length;
+      throw new Error(
+        `No open tiles available for ${label} placement on map (${game.map.width}x${game.map.height}). ` +
+        `Walkable tiles: ${walkableTiles}.`
+      );
     }
 
     function clearExit() {
@@ -224,8 +229,8 @@
 
     function placePlayer() {
       const minX = 1;
-      const playerSpawnMaxX = Math.max(PLAYER_SPAWN_LIMIT_MIN_X, Math.floor(game.map.width / SPAWN_WIDTH_DIVISOR));
-      const maxX = Math.max(minX, playerSpawnMaxX);
+      const playerSpawnLimitX = Math.max(PLAYER_SPAWN_LIMIT_MIN_X, Math.floor(game.map.width / SPAWN_WIDTH_DIVISOR));
+      const maxX = Math.max(minX, playerSpawnLimitX);
       const spawn = findOpenTile({ minX, maxX, label: 'player' });
       game.player.x = spawn.x;
       game.player.y = spawn.y;
@@ -235,7 +240,9 @@
       const area = game.map.width * game.map.height;
       const obstacleCount = Math.max(MIN_OBSTACLE_COUNT, Math.floor(area * OBSTACLE_DENSITY));
       let placed = 0;
-      while (placed < obstacleCount) {
+      let attempts = 0;
+      while (placed < obstacleCount && attempts < MAX_OBSTACLE_PLACEMENT_TRIES) {
+        attempts += 1;
         const x = randomInt(1, game.map.width - 2);
         const y = randomInt(1, game.map.height - 2);
         if (game.map.tiles[y][x] !== FLOOR) continue;
@@ -256,6 +263,7 @@
       const area = game.map.width * game.map.height;
       const maxEnemies = Math.min(MAX_ENEMY_CAP, Math.max(2, Math.floor(area / ENEMY_AREA_PER_SPAWN)));
       const enemyCount = randomInt(2, maxEnemies);
+      // Ensure each level spawns at least one melee and one ranged enemy.
       const types = ['melee', 'ranged'];
       while (types.length < enemyCount) {
         types.push(randomEnemyKind());
@@ -481,7 +489,8 @@
       if (arrowKeys.every((key) => moveKeys.includes(key))) moveParts.push('Arrow Keys');
       const attackKeys = Array.from(ATTACK_KEYS).map((key) => key === ' ' ? 'Space' : key.toUpperCase());
       document.getElementById('controls').textContent =
-        `Move: ${moveParts.join('/')} • Fire laser: ${attackKeys.join('/')} (uses last move direction) • Aim+fire (one key): I/J/K/L • Reach ${EXIT} to clear levels; finishing all levels advances to the next floor.`;
+        `Move: ${moveParts.join('/')} • Fire laser: ${attackKeys.join('/')} (uses last move direction) ` +
+        `• Aim+fire (one key): I/J/K/L (↑/←/↓/→) • Reach ${EXIT} to clear levels; finishing all levels advances to the next floor.`;
     }
 
     window.addEventListener('keydown', (event) => {
