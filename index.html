@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ASCII Soul Room</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #0b0d10;
+      color: #d7f7d7;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+    main {
+      width: min(92vw, 720px);
+      border: 1px solid #2f5240;
+      border-radius: 10px;
+      background: #12171f;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+    pre {
+      margin: 0;
+      min-height: 250px;
+      line-height: 1.2;
+      font-size: 16px;
+      white-space: pre;
+      overflow-x: auto;
+      color: #96ff9f;
+    }
+    .hud {
+      margin-bottom: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: #d3ead7;
+      font-size: 14px;
+    }
+    .controls {
+      margin-top: 10px;
+      color: #9ec4a2;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="hud" id="hud"></div>
+    <pre id="screen" aria-live="polite"></pre>
+    <div class="controls">Move: WASD/Arrow Keys • Attack (base weapon): Space/F • Entering <strong>&gt;</strong> generates the next room forever.</div>
+  </main>
+
+  <script>
+    const WIDTH = 23;
+    const HEIGHT = 13;
+    const FLOOR = '.';
+    const WALL = '#';
+    const EXIT = '>';
+
+    const game = {
+      room: 1,
+      player: { x: 2, y: Math.floor(HEIGHT / 2), hp: 6 },
+      weapon: { name: 'Starter Sword', damage: 1, range: 1 },
+      enemy: null,
+      message: 'Find and slash the slime. Step on > to generate the next room.'
+    };
+
+    function randomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function spawnRoom() {
+      game.player.x = 2;
+      game.player.y = Math.floor(HEIGHT / 2);
+      game.enemy = {
+        type: 'Slime',
+        x: randomInt(Math.floor(WIDTH / 2), WIDTH - 3),
+        y: randomInt(2, HEIGHT - 3),
+        hp: 3,
+        dmg: 1
+      };
+    }
+
+    function tileAt(x, y) {
+      if (x <= 0 || y <= 0 || x >= WIDTH - 1 || y >= HEIGHT - 1) return WALL;
+      if (x === WIDTH - 2 && y === Math.floor(HEIGHT / 2)) return EXIT;
+      return FLOOR;
+    }
+
+    function canWalk(x, y) {
+      return tileAt(x, y) !== WALL;
+    }
+
+    function tryMove(dx, dy) {
+      const nx = game.player.x + dx;
+      const ny = game.player.y + dy;
+      if (canWalk(nx, ny)) {
+        game.player.x = nx;
+        game.player.y = ny;
+        if (tileAt(nx, ny) === EXIT) {
+          game.room += 1;
+          game.message = `You push into room ${game.room}. A new slime appears.`;
+          spawnRoom();
+          render();
+          return;
+        }
+        enemyTurn();
+      }
+      render();
+    }
+
+    function attack() {
+      const e = game.enemy;
+      if (!e) {
+        game.message = 'No enemy in this room.';
+        render();
+        return;
+      }
+      const dist = Math.abs(game.player.x - e.x) + Math.abs(game.player.y - e.y);
+      if (dist <= game.weapon.range) {
+        e.hp -= game.weapon.damage;
+        if (e.hp <= 0) {
+          game.enemy = null;
+          game.message = `${e.type} defeated. Move to > for the next infinite room.`;
+          render();
+          return;
+        }
+        game.message = `You hit ${e.type}. (${e.hp} hp left)`;
+      } else {
+        game.message = 'Swing missed. Get closer.';
+      }
+      enemyTurn();
+      render();
+    }
+
+    function enemyTurn() {
+      const e = game.enemy;
+      if (!e) return;
+      const dx = Math.sign(game.player.x - e.x);
+      const dy = Math.sign(game.player.y - e.y);
+      const adjacent = Math.abs(game.player.x - e.x) + Math.abs(game.player.y - e.y) === 1;
+
+      if (adjacent) {
+        game.player.hp -= e.dmg;
+        game.message = `${e.type} hits you. HP: ${game.player.hp}`;
+        if (game.player.hp <= 0) {
+          game.room = 1;
+          game.player.hp = 6;
+          game.message = 'You fell. Restarting at room 1.';
+          spawnRoom();
+        }
+        return;
+      }
+
+      const nextX = e.x + dx;
+      const nextY = e.y + dy;
+      if (canWalk(nextX, nextY) && !(nextX === game.player.x && nextY === game.player.y)) {
+        e.x = nextX;
+        e.y = nextY;
+      }
+    }
+
+    function render() {
+      const rows = [];
+      for (let y = 0; y < HEIGHT; y++) {
+        let row = '';
+        for (let x = 0; x < WIDTH; x++) {
+          let ch = tileAt(x, y);
+          if (game.enemy && game.enemy.x === x && game.enemy.y === y) ch = 'S';
+          if (game.player.x === x && game.player.y === y) ch = '@';
+          row += ch;
+        }
+        rows.push(row);
+      }
+      document.getElementById('hud').textContent =
+        `Room: ${game.room} | HP: ${game.player.hp} | Weapon: ${game.weapon.name} | Enemy: ${game.enemy ? game.enemy.type : 'none'}`;
+      document.getElementById('screen').textContent = rows.join('\n') + `\n\n${game.message}`;
+    }
+
+    window.addEventListener('keydown', (event) => {
+      const key = event.key.toLowerCase();
+      if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd', ' ', 'f'].includes(key)) {
+        event.preventDefault();
+      }
+      if (key === 'arrowup' || key === 'w') return tryMove(0, -1);
+      if (key === 'arrowdown' || key === 's') return tryMove(0, 1);
+      if (key === 'arrowleft' || key === 'a') return tryMove(-1, 0);
+      if (key === 'arrowright' || key === 'd') return tryMove(1, 0);
+      if (key === ' ' || key === 'f') return attack();
+    });
+
+    spawnRoom();
+    render();
+  </script>
+</body>
+</html>
