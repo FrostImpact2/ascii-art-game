@@ -75,9 +75,8 @@
     const PLAYER_MAX_HP = 8;
     const RANGED_COOLDOWN_TURNS = 3;
     const MAX_PLACEMENT_TRIES = 2000;
-    const MIN_SPAWN_X = 2;
-    const SPAWN_WIDTH_DIVISOR = 3;
-    const ENEMY_SPAWN_DIVISOR = 3;
+    const PLAYER_SPAWN_LIMIT_MIN_X = 2;
+    const SPAWN_LIMIT_DIVISOR = 3;
 
     const KEY_TO_MOVE = {
       arrowup: [0, -1],
@@ -118,6 +117,10 @@
 
     function randomInt(min, max) {
       return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function isWallPosition(x, y, width, height) {
+      return x === 0 || y === 0 || x === width - 1 || y === height - 1;
     }
 
     function getManhattanDistance(ax, ay, bx, by) {
@@ -190,7 +193,7 @@
           return { x, y };
         }
       }
-      throw new Error('No open tiles available for placement.');
+      throw new Error(`No open tiles available for placement on map (${game.map.width}x${game.map.height}).`);
     }
 
     function clearExit() {
@@ -212,7 +215,7 @@
 
     function placePlayer() {
       const minX = 1;
-      const spawnLimit = Math.max(MIN_SPAWN_X, Math.floor(game.map.width / SPAWN_WIDTH_DIVISOR));
+      const spawnLimit = Math.max(PLAYER_SPAWN_LIMIT_MIN_X, Math.floor(game.map.width / SPAWN_LIMIT_DIVISOR));
       const maxX = Math.max(minX, spawnLimit);
       const spawn = findOpenTile({ minX, maxX });
       game.player.x = spawn.x;
@@ -234,7 +237,7 @@
 
     function createMap(width, height) {
       const tiles = Array.from({ length: height }, (_, y) =>
-        Array.from({ length: width }, (_, x) => (x === 0 || y === 0 || x === width - 1 || y === height - 1 ? WALL : FLOOR))
+        Array.from({ length: width }, (_, x) => (isWallPosition(x, y, width, height) ? WALL : FLOOR))
       );
       game.map = { width, height, tiles };
       placeObstacles();
@@ -255,7 +258,7 @@
       }
       game.enemies = types.map((kind) => {
         const spawn = findOpenTile({
-          minX: Math.floor(game.map.width / ENEMY_SPAWN_DIVISOR),
+          minX: Math.floor(game.map.width / SPAWN_LIMIT_DIVISOR),
           avoid: [{ x: game.player.x, y: game.player.y }],
           minDistance: 3
         });
@@ -266,7 +269,7 @@
           y: spawn.y,
           hp: kind === 'melee' ? 4 : 3,
           dmg: 1,
-          cooldown: randomInt(1, RANGED_COOLDOWN_TURNS)
+          cooldown: RANGED_COOLDOWN_TURNS
         };
       });
     }
@@ -430,7 +433,9 @@
           continue;
         }
         if (enemy.kind === 'ranged') {
-          enemy.cooldown = Math.max(0, enemy.cooldown - 1);
+          if (enemy.cooldown > 0) {
+            enemy.cooldown -= 1;
+          }
           if (enemy.cooldown === 0) {
             const fired = shootProjectile(enemy);
             if (fired) {
