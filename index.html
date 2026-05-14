@@ -55,12 +55,26 @@
   </main>
 
   <script>
-    const WIDTH = 23;
-    const HEIGHT = 13;
-    const MIN_ENEMY_SPAWN_X = Math.floor(WIDTH / 2);
     const FLOOR = '.';
     const WALL = '#';
     const EXIT = '>';
+    const OBSTACLE = 'O';
+    const PLAYER_CHAR = '@';
+    const PROJECTILE_CHAR = '*';
+    const ENEMY_CHARS = { melee: 'M', ranged: 'R' };
+
+    const MIN_WIDTH = 21;
+    const MAX_WIDTH = 33;
+    const MIN_HEIGHT = 11;
+    const MAX_HEIGHT = 19;
+    const MIN_LEVELS_PER_FLOOR = 2;
+    const MAX_LEVELS_PER_FLOOR = 4;
+    const MAX_ENEMY_CAP = 10;
+    const ENEMY_DENSITY = 60;
+    const OBSTACLE_DENSITY = 0.08;
+    const PLAYER_MAX_HP = 8;
+    const RANGED_COOLDOWN_TURNS = 3;
+
     const KEY_TO_MOVE = {
       arrowup: [0, -1],
       w: [0, -1],
@@ -71,57 +85,211 @@
       arrowright: [1, 0],
       d: [1, 0]
     };
+    const KEY_TO_AIM = {
+      i: [0, -1],
+      k: [0, 1],
+      j: [-1, 0],
+      l: [1, 0]
+    };
     const ATTACK_KEYS = new Set([' ', 'f']);
-    const HANDLED_KEYS = new Set([...Object.keys(KEY_TO_MOVE), ...ATTACK_KEYS]);
+    const HANDLED_KEYS = new Set([
+      ...Object.keys(KEY_TO_MOVE),
+      ...Object.keys(KEY_TO_AIM),
+      ...ATTACK_KEYS
+    ]);
 
     const game = {
-      room: 1,
-      player: { x: 2, y: Math.floor(HEIGHT / 2), hp: 6 },
-      weapon: { name: 'Starter Sword', damage: 1, range: 1 },
-      enemy: null,
-      message: `Find and slash the slime. Step on ${EXIT} to generate the next room.`
+      floor: 1,
+      level: 1,
+      levelInFloor: 1,
+      levelsPerFloor: 1,
+      turn: 0,
+      player: { x: 0, y: 0, hp: PLAYER_MAX_HP, aim: [1, 0] },
+      weapon: { name: 'Laser Carbine', damage: 1 },
+      map: null,
+      enemies: [],
+      projectiles: [],
+      message: ''
     };
 
     function randomInt(min, max) {
       return Math.floor(Math.random() * (max - min + 1)) + min;
     }
 
-    function generateFreshRoom() {
-      game.player.x = 2;
-      game.player.y = Math.floor(HEIGHT / 2);
-      game.enemy = {
-        type: 'Slime',
-        x: randomInt(MIN_ENEMY_SPAWN_X, WIDTH - 3),
-        y: randomInt(2, HEIGHT - 3),
-        hp: 3,
-        dmg: 1
-      };
-    }
-
     function getManhattanDistance(ax, ay, bx, by) {
       return Math.abs(ax - bx) + Math.abs(ay - by);
     }
 
+    function isInsideMap(x, y) {
+      return !!game.map && x >= 0 && y >= 0 && x < game.map.width && y < game.map.height;
+    }
+
     function tileAt(x, y) {
-      if (x <= 0 || y <= 0 || x >= WIDTH - 1 || y >= HEIGHT - 1) return WALL;
-      if (x === WIDTH - 2 && y === Math.floor(HEIGHT / 2)) return EXIT;
-      return FLOOR;
+      if (!isInsideMap(x, y)) return WALL;
+      return game.map.tiles[y][x];
+    }
+
+    function isBlockingTile(tile) {
+      return tile === WALL || tile === OBSTACLE;
     }
 
     function canWalk(x, y) {
-      return tileAt(x, y) !== WALL;
+      const tile = tileAt(x, y);
+      return tile !== WALL && tile !== OBSTACLE;
+    }
+
+    function enemyAt(x, y) {
+      return game.enemies.find((enemy) => enemy.x === x && enemy.y === y);
+    }
+
+    function isOccupied(x, y) {
+      if (game.player.x === x && game.player.y === y) return true;
+      return Boolean(enemyAt(x, y));
+    }
+
+    function findOpenTile({
+      minX = 1,
+      maxX = game.map.width - 2,
+      minY = 1,
+      maxY = game.map.height - 2,
+      avoid = [],
+      minDistance = 0
+    } = {}) {
+      for (let tries = 0; tries < 2000; tries += 1) {
+        const x = randomInt(minX, maxX);
+        const y = randomInt(minY, maxY);
+        if (!canWalk(x, y)) continue;
+        if (isOccupied(x, y)) continue;
+        if (avoid.some((spot) => getManhattanDistance(x, y, spot.x, spot.y) < minDistance)) {
+          continue;
+        }
+        return { x, y };
+      }
+      return { x: minX, y: minY };
+    }
+
+    function clearExit() {
+      for (let y = 0; y < game.map.height; y += 1) {
+        for (let x = 0; x < game.map.width; x += 1) {
+          if (game.map.tiles[y][x] === EXIT) game.map.tiles[y][x] = FLOOR;
+        }
+      }
+    }
+
+    function placeExit() {
+      clearExit();
+      const exitSpot = findOpenTile({
+        avoid: [{ x: game.player.x, y: game.player.y }],
+        minDistance: Math.floor(game.map.width / 3)
+      });
+      game.map.tiles[exitSpot.y][exitSpot.x] = EXIT;
+    }
+
+    function placePlayer() {
+      const maxX = Math.max(2, Math.floor(game.map.width / 3));
+      const spawn = findOpenTile({ minX: 1, maxX });
+      game.player.x = spawn.x;
+      game.player.y = spawn.y;
+    }
+
+    function placeObstacles() {
+      const area = game.map.width * game.map.height;
+      const obstacleCount = Math.max(3, Math.floor(area * OBSTACLE_DENSITY));
+      let placed = 0;
+      while (placed < obstacleCount) {
+        const x = randomInt(1, game.map.width - 2);
+        const y = randomInt(1, game.map.height - 2);
+        if (game.map.tiles[y][x] !== FLOOR) continue;
+        game.map.tiles[y][x] = OBSTACLE;
+        placed += 1;
+      }
+    }
+
+    function createMap(width, height) {
+      const tiles = Array.from({ length: height }, (_, y) =>
+        Array.from({ length: width }, (_, x) => (x === 0 || y === 0 || x === width - 1 || y === height - 1 ? WALL : FLOOR))
+      );
+      game.map = { width, height, tiles };
+      placeObstacles();
+    }
+
+    function spawnEnemies() {
+      const area = game.map.width * game.map.height;
+      const maxEnemies = Math.min(MAX_ENEMY_CAP, Math.max(2, Math.floor(area / ENEMY_DENSITY)));
+      const enemyCount = randomInt(1, maxEnemies);
+      const types = [];
+      if (enemyCount >= 2) {
+        types.push('melee', 'ranged');
+      } else {
+        types.push(Math.random() > 0.5 ? 'melee' : 'ranged');
+      }
+      while (types.length < enemyCount) {
+        types.push(Math.random() > 0.5 ? 'melee' : 'ranged');
+      }
+      game.enemies = types.map((kind) => {
+        const spawn = findOpenTile({
+          minX: Math.floor(game.map.width / 3),
+          avoid: [{ x: game.player.x, y: game.player.y }],
+          minDistance: 3
+        });
+        return {
+          kind,
+          type: kind === 'melee' ? 'Bruiser' : 'Gunner',
+          x: spawn.x,
+          y: spawn.y,
+          hp: kind === 'melee' ? 4 : 3,
+          dmg: 1,
+          cooldown: randomInt(0, RANGED_COOLDOWN_TURNS - 1)
+        };
+      });
+    }
+
+    function generateFloor() {
+      const width = randomInt(MIN_WIDTH, MAX_WIDTH);
+      const height = randomInt(MIN_HEIGHT, MAX_HEIGHT);
+      createMap(width, height);
+      placePlayer();
+      placeExit();
+      game.levelsPerFloor = randomInt(MIN_LEVELS_PER_FLOOR, MAX_LEVELS_PER_FLOOR);
+      game.levelInFloor = 1;
+      game.projectiles = [];
+      spawnEnemies();
+      game.message = `Floor ${game.floor} begins. ${game.levelsPerFloor} levels to clear.`;
+    }
+
+    function advanceLevel() {
+      game.level += 1;
+      if (game.levelInFloor < game.levelsPerFloor) {
+        game.levelInFloor += 1;
+        placeExit();
+        game.projectiles = [];
+        spawnEnemies();
+        game.message = `Level ${game.levelInFloor}/${game.levelsPerFloor} on floor ${game.floor}. New enemies arrive.`;
+      } else {
+        game.floor += 1;
+        game.levelInFloor = 1;
+        generateFloor();
+        game.message = `You reach floor ${game.floor}. A new map unfolds.`;
+      }
+    }
+
+    function resetGame() {
+      game.floor = 1;
+      game.level = 1;
+      game.player.hp = PLAYER_MAX_HP;
+      game.player.aim = [1, 0];
+      generateFloor();
+      game.message = 'You fell. Restarting at floor 1.';
     }
 
     function tryMove(dx, dy) {
       const nx = game.player.x + dx;
       const ny = game.player.y + dy;
-      if (canWalk(nx, ny)) {
+      if (canWalk(nx, ny) && !enemyAt(nx, ny)) {
         game.player.x = nx;
         game.player.y = ny;
         if (tileAt(nx, ny) === EXIT) {
-          game.room += 1;
-          game.message = `You push into room ${game.room}. A new slime appears.`;
-          generateFreshRoom();
+          advanceLevel();
           render();
           return;
         }
@@ -130,71 +298,142 @@
       render();
     }
 
-    function attack() {
-      const e = game.enemy;
-      if (!e) {
-        game.message = 'No enemy in this room.';
+    function fireLaser(dx, dy) {
+      if (dx === 0 && dy === 0) {
+        game.message = 'Aim the laser before firing.';
         render();
         return;
       }
-      const dist = getManhattanDistance(game.player.x, game.player.y, e.x, e.y);
-      if (dist <= game.weapon.range) {
-        e.hp -= game.weapon.damage;
-        if (e.hp <= 0) {
-          game.enemy = null;
-          game.message = `${e.type} defeated. Move to ${EXIT} for the next infinite room.`;
-          render();
-          return;
+      let hits = 0;
+      let x = game.player.x + dx;
+      let y = game.player.y + dy;
+      while (isInsideMap(x, y)) {
+        const tile = tileAt(x, y);
+        if (isBlockingTile(tile)) break;
+        const enemy = enemyAt(x, y);
+        if (enemy) {
+          enemy.hp -= game.weapon.damage;
+          hits += 1;
         }
-        game.message = `You hit ${e.type}. (${e.hp} hp left)`;
+        x += dx;
+        y += dy;
+      }
+      game.enemies = game.enemies.filter((enemy) => enemy.hp > 0);
+      if (hits > 0) {
+        game.message = hits === 1 ? 'Laser hits its mark.' : `Laser hits ${hits} targets.`;
       } else {
-        game.message = 'Swing missed. Get closer.';
+        game.message = 'Laser streaks through the halls.';
+      }
+      if (game.enemies.length === 0) {
+        game.message += ` The level is clear—find ${EXIT} to advance.`;
       }
       enemyTurn();
       render();
     }
 
-    function enemyTurn() {
-      const e = game.enemy;
-      if (!e) return;
-      const dx = Math.sign(game.player.x - e.x);
-      const dy = Math.sign(game.player.y - e.y);
-      const inMeleeRange = getManhattanDistance(game.player.x, game.player.y, e.x, e.y) === 1;
+    function shootProjectile(enemy) {
+      const dx = Math.sign(game.player.x - enemy.x);
+      const dy = Math.sign(game.player.y - enemy.y);
+      if (dx === 0 && dy === 0) return false;
+      const startX = enemy.x + dx;
+      const startY = enemy.y + dy;
+      if (!isInsideMap(startX, startY)) return false;
+      if (isBlockingTile(tileAt(startX, startY))) return false;
+      game.projectiles.push({ x: startX, y: startY, dx, dy, dmg: enemy.dmg });
+      return true;
+    }
 
-      if (inMeleeRange) {
-        game.player.hp -= e.dmg;
-        game.message = `${e.type} hits you. HP: ${game.player.hp}`;
-        if (game.player.hp <= 0) {
-          game.room = 1;
-          game.player.hp = 6;
-          game.message = 'You fell. Restarting at room 1.';
-          generateFreshRoom();
+    function advanceProjectiles() {
+      if (game.projectiles.length === 0) return;
+      const remaining = [];
+      for (const projectile of game.projectiles) {
+        const nx = projectile.x + projectile.dx;
+        const ny = projectile.y + projectile.dy;
+        if (!isInsideMap(nx, ny)) continue;
+        const tile = tileAt(nx, ny);
+        if (isBlockingTile(tile)) continue;
+        if (game.player.x === nx && game.player.y === ny) {
+          game.player.hp -= projectile.dmg;
+          game.message = `You are hit by a shot! HP: ${game.player.hp}`;
+          if (game.player.hp <= 0) {
+            resetGame();
+            return true;
+          }
+          continue;
         }
-        return;
+        projectile.x = nx;
+        projectile.y = ny;
+        remaining.push(projectile);
       }
+      game.projectiles = remaining;
+      return false;
+    }
 
-      const nextX = e.x + dx;
-      const nextY = e.y + dy;
-      if (canWalk(nextX, nextY)) {
-        e.x = nextX;
-        e.y = nextY;
+    function moveEnemyToward(enemy, dx, dy) {
+      const stepOptions = [];
+      if (dx !== 0) stepOptions.push([dx, 0]);
+      if (dy !== 0) stepOptions.push([0, dy]);
+      for (const [sx, sy] of stepOptions) {
+        const nx = enemy.x + sx;
+        const ny = enemy.y + sy;
+        if (canWalk(nx, ny) && !enemyAt(nx, ny) && !(game.player.x === nx && game.player.y === ny)) {
+          enemy.x = nx;
+          enemy.y = ny;
+          break;
+        }
+      }
+    }
+
+    function enemyTurn() {
+      game.turn += 1;
+      const reset = advanceProjectiles();
+      if (reset) return;
+      if (game.enemies.length === 0) return;
+      for (const enemy of game.enemies) {
+        const dx = Math.sign(game.player.x - enemy.x);
+        const dy = Math.sign(game.player.y - enemy.y);
+        const inMeleeRange = getManhattanDistance(game.player.x, game.player.y, enemy.x, enemy.y) === 1;
+        if (inMeleeRange) {
+          game.player.hp -= enemy.dmg;
+          game.message = `${enemy.type} strikes you. HP: ${game.player.hp}`;
+          if (game.player.hp <= 0) {
+            resetGame();
+            return;
+          }
+          continue;
+        }
+        if (enemy.kind === 'ranged') {
+          enemy.cooldown = Math.max(0, enemy.cooldown - 1);
+          if (enemy.cooldown === 0) {
+            const fired = shootProjectile(enemy);
+            if (fired) {
+              enemy.cooldown = RANGED_COOLDOWN_TURNS;
+              game.message = `${enemy.type} fires a shot!`;
+              continue;
+            }
+          }
+        }
+        moveEnemyToward(enemy, dx, dy);
       }
     }
 
     function render() {
       const rows = [];
-      for (let y = 0; y < HEIGHT; y++) {
+      for (let y = 0; y < game.map.height; y++) {
         let row = '';
-        for (let x = 0; x < WIDTH; x++) {
+        for (let x = 0; x < game.map.width; x++) {
           let ch = tileAt(x, y);
-          if (game.enemy && game.enemy.x === x && game.enemy.y === y) ch = 'S';
-          if (game.player.x === x && game.player.y === y) ch = '@';
+          const projectile = game.projectiles.find((shot) => shot.x === x && shot.y === y);
+          if (projectile) ch = PROJECTILE_CHAR;
+          const enemy = enemyAt(x, y);
+          if (enemy) ch = ENEMY_CHARS[enemy.kind];
+          if (game.player.x === x && game.player.y === y) ch = PLAYER_CHAR;
           row += ch;
         }
         rows.push(row);
       }
       document.getElementById('hud').textContent =
-        `Room: ${game.room} | HP: ${game.player.hp} | Weapon: ${game.weapon.name} | Enemy: ${game.enemy ? game.enemy.type : 'none'}`;
+        `Floor: ${game.floor} | Level: ${game.levelInFloor}/${game.levelsPerFloor} | HP: ${game.player.hp} | Weapon: ${game.weapon.name} | Enemies: ${game.enemies.length}`;
       document.getElementById('screen').textContent = rows.join('\n') + `\n\n${game.message}`;
     }
 
@@ -207,7 +446,7 @@
       if (arrowKeys.every((key) => moveKeys.includes(key))) moveParts.push('Arrow Keys');
       const attackKeys = Array.from(ATTACK_KEYS).map((key) => key === ' ' ? 'Space' : key.toUpperCase());
       document.getElementById('controls').textContent =
-        `Move: ${moveParts.join('/')} • Attack (base weapon): ${attackKeys.join('/')} • Entering ${EXIT} generates the next room forever.`;
+        `Move: ${moveParts.join('/')} • Fire laser: ${attackKeys.join('/')} (uses last move) • Aim + fire: I/J/K/L • Reach ${EXIT} to advance levels on the same floor.`;
     }
 
     window.addEventListener('keydown', (event) => {
@@ -217,13 +456,19 @@
       }
       if (KEY_TO_MOVE[key]) {
         const [dx, dy] = KEY_TO_MOVE[key];
+        game.player.aim = [dx, dy];
         tryMove(dx, dy);
+      } else if (KEY_TO_AIM[key]) {
+        const [dx, dy] = KEY_TO_AIM[key];
+        game.player.aim = [dx, dy];
+        fireLaser(dx, dy);
       } else if (ATTACK_KEYS.has(key)) {
-        attack();
+        const [dx, dy] = game.player.aim;
+        fireLaser(dx, dy);
       }
     });
 
-    generateFreshRoom();
+    generateFloor();
     renderControls();
     render();
   </script>
