@@ -183,7 +183,14 @@
           return { x, y };
         }
       }
-      return { x: safeMinX, y: safeMinY };
+      for (let y = 1; y < game.map.height - 1; y += 1) {
+        for (let x = 1; x < game.map.width - 1; x += 1) {
+          if (!canWalk(x, y)) continue;
+          if (isOccupied(x, y)) continue;
+          return { x, y };
+        }
+      }
+      throw new Error('No open tiles available for placement.');
     }
 
     function clearExit() {
@@ -205,7 +212,8 @@
 
     function placePlayer() {
       const minX = 1;
-      const maxX = Math.max(minX, Math.max(MIN_SPAWN_X, Math.floor(game.map.width / SPAWN_WIDTH_DIVISOR)));
+      const spawnLimit = Math.max(MIN_SPAWN_X, Math.floor(game.map.width / SPAWN_WIDTH_DIVISOR));
+      const maxX = Math.max(minX, spawnLimit);
       const spawn = findOpenTile({ minX, maxX });
       game.player.x = spawn.x;
       game.player.y = spawn.y;
@@ -258,7 +266,7 @@
           y: spawn.y,
           hp: kind === 'melee' ? 4 : 3,
           dmg: 1,
-          cooldown: randomInt(0, RANGED_COOLDOWN_TURNS - 1)
+          cooldown: randomInt(1, RANGED_COOLDOWN_TURNS)
         };
       });
     }
@@ -465,7 +473,7 @@
       if (arrowKeys.every((key) => moveKeys.includes(key))) moveParts.push('Arrow Keys');
       const attackKeys = Array.from(ATTACK_KEYS).map((key) => key === ' ' ? 'Space' : key.toUpperCase());
       document.getElementById('controls').textContent =
-        `Move: ${moveParts.join('/')} • Fire laser: ${attackKeys.join('/')} (uses last move direction) • Aim and fire: I/J/K/L • Reach ${EXIT} to advance levels on the same floor.`;
+        `Move: ${moveParts.join('/')} • Fire laser: ${attackKeys.join('/')} (uses last move direction) • Aim and fire: I/J/K/L • Reach ${EXIT} to clear levels; finishing all levels advances to the next floor.`;
     }
 
     window.addEventListener('keydown', (event) => {
