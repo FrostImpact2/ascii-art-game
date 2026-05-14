@@ -86,7 +86,7 @@
       return Math.floor(Math.random() * (max - min + 1)) + min;
     }
 
-    function spawnRoom() {
+    function generateFreshRoom() {
       game.player.x = 2;
       game.player.y = Math.floor(HEIGHT / 2);
       game.enemy = {
@@ -121,7 +121,7 @@
         if (tileAt(nx, ny) === EXIT) {
           game.room += 1;
           game.message = `You push into room ${game.room}. A new slime appears.`;
-          spawnRoom();
+          generateFreshRoom();
           render();
           return;
         }
@@ -159,16 +159,16 @@
       if (!e) return;
       const dx = Math.sign(game.player.x - e.x);
       const dy = Math.sign(game.player.y - e.y);
-      const adjacent = getManhattanDistance(game.player.x, game.player.y, e.x, e.y) === 1;
+      const inMeleeRange = getManhattanDistance(game.player.x, game.player.y, e.x, e.y) === 1;
 
-      if (adjacent) {
+      if (inMeleeRange) {
         game.player.hp -= e.dmg;
         game.message = `${e.type} hits you. HP: ${game.player.hp}`;
         if (game.player.hp <= 0) {
           game.room = 1;
           game.player.hp = 6;
           game.message = 'You fell. Restarting at room 1.';
-          spawnRoom();
+          generateFreshRoom();
         }
         return;
       }
@@ -205,12 +205,13 @@
       }
       if (KEY_TO_MOVE[key]) {
         const [dx, dy] = KEY_TO_MOVE[key];
-        return tryMove(dx, dy);
+        tryMove(dx, dy);
+      } else if (ATTACK_KEYS.has(key)) {
+        attack();
       }
-      if (ATTACK_KEYS.has(key)) return attack();
     });
 
-    spawnRoom();
+    generateFreshRoom();
     render();
   </script>
 </body>
