@@ -74,6 +74,9 @@
     const OBSTACLE_DENSITY = 0.08;
     const PLAYER_MAX_HP = 8;
     const RANGED_COOLDOWN_TURNS = 3;
+    const MAX_PLACEMENT_TRIES = 2000;
+    const MIN_SPAWN_X = 2;
+    const SPAWN_WIDTH_DIVISOR = 3;
 
     const KEY_TO_MOVE = {
       arrowup: [0, -1],
@@ -155,7 +158,7 @@
       avoid = [],
       minDistance = 0
     } = {}) {
-      for (let tries = 0; tries < 2000; tries += 1) {
+      for (let tries = 0; tries < MAX_PLACEMENT_TRIES; tries += 1) {
         const x = randomInt(minX, maxX);
         const y = randomInt(minY, maxY);
         if (!canWalk(x, y)) continue;
@@ -186,7 +189,7 @@
     }
 
     function placePlayer() {
-      const maxX = Math.max(2, Math.floor(game.map.width / 3));
+      const maxX = Math.max(MIN_SPAWN_X, Math.floor(game.map.width / SPAWN_WIDTH_DIVISOR));
       const spawn = findOpenTile({ minX: 1, maxX });
       game.player.x = spawn.x;
       game.player.y = spawn.y;
@@ -446,7 +449,7 @@
       if (arrowKeys.every((key) => moveKeys.includes(key))) moveParts.push('Arrow Keys');
       const attackKeys = Array.from(ATTACK_KEYS).map((key) => key === ' ' ? 'Space' : key.toUpperCase());
       document.getElementById('controls').textContent =
-        `Move: ${moveParts.join('/')} • Fire laser: ${attackKeys.join('/')} (uses last move) • Aim + fire: I/J/K/L • Reach ${EXIT} to advance levels on the same floor.`;
+        `Move: ${moveParts.join('/')} • Fire laser: ${attackKeys.join('/')} (uses last move) • Aim and fire: I/J/K/L • Reach ${EXIT} to advance levels on the same floor.`;
     }
 
     window.addEventListener('keydown', (event) => {
