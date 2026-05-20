@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ASCII Soul Room</title>
+  <title>Embers of the Dark Room</title>
   <style>
     :root { color-scheme: dark; }
     body {
@@ -16,7 +16,7 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     }
     main {
-      width: min(92vw, 720px);
+      width: min(94vw, 780px);
       border: 1px solid #2f5240;
       border-radius: 10px;
       background: #12171f;
@@ -25,9 +25,9 @@
     }
     pre {
       margin: 0;
-      min-height: 250px;
+      min-height: 280px;
       line-height: 1.2;
-      font-size: 16px;
+      font-size: 15px;
       white-space: pre;
       overflow-x: auto;
       color: #96ff9f;
@@ -36,14 +36,39 @@
       margin-bottom: 10px;
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 8px;
       color: #d3ead7;
-      font-size: 14px;
+      font-size: 13px;
     }
     .controls {
-      margin-top: 10px;
-      color: #9ec4a2;
+      margin-top: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .controls button {
+      border: 1px solid #2f5240;
+      background: #1a222e;
+      color: #d7f7d7;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-family: inherit;
       font-size: 13px;
+      cursor: pointer;
+      transition: transform 0.1s ease, border-color 0.2s ease;
+    }
+    .controls button:hover:not(:disabled) {
+      border-color: #5aa673;
+      transform: translateY(-1px);
+    }
+    .controls button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+    .controls .hint {
+      flex-basis: 100%;
+      color: #9ec4a2;
+      font-size: 12px;
     }
   </style>
 </head>
@@ -55,465 +80,526 @@
   </main>
 
   <script>
-    const FLOOR = '.';
-    const WALL = '#';
-    const EXIT = '>';
-    const OBSTACLE = 'O';
-    const PLAYER_CHAR = '@';
-    const PROJECTILE_CHAR = '*';
-    const ENEMY_CHARS = { melee: 'M', ranged: 'R' };
+    const ACTION_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'q', 'w', 'e', 'r', 't'];
+    const CLASS_TEMPLATES = [
+      { name: 'Fighter', hp: 8, power: 2 },
+      { name: 'Ranger', hp: 6, power: 3 },
+      { name: 'Mage', hp: 5, power: 4 },
+      { name: 'Cleric', hp: 7, power: 2 }
+    ];
+    const NAMES = ['Ari', 'Borin', 'Cora', 'Dain', 'Elara', 'Fenn', 'Greer', 'Hale', 'Iona', 'Jora'];
+    const EPITHETS = ['the Bold', 'the Quiet', 'the Keen', 'the Stalwart', 'the Ember', 'the Rune'];
 
-    const MIN_WIDTH = 21;
-    const MAX_WIDTH = 33;
-    const MIN_HEIGHT = 11;
-    const MAX_HEIGHT = 19;
-    const MIN_LEVELS_PER_FLOOR = 2;
-    const MAX_LEVELS_PER_FLOOR = 4;
-    const MAX_ENEMY_CAP = 10;
-    const ENEMY_AREA_PER_SPAWN = 60;
-    const OBSTACLE_DENSITY = 0.08;
-    const MIN_OBSTACLE_COUNT = 3;
-    const PLAYER_MAX_HP = 8;
-    const RANGED_COOLDOWN_TURNS = 3;
-    const RANGED_SPAWN_PROBABILITY = 0.5;
-    const MAX_PLACEMENT_TRIES = 2000;
-    const MAX_OBSTACLE_PLACEMENT_TRIES = 5000;
-    const PLAYER_SPAWN_LIMIT_MIN_X = 2;
-    const SPAWN_WIDTH_DIVISOR = 3;
-    const EXIT_MIN_DISTANCE_DIVISOR = 3;
-    const MIN_ENEMY_SPAWN_DISTANCE = 3;
-
-    const KEY_TO_MOVE = {
-      arrowup: [0, -1],
-      w: [0, -1],
-      arrowdown: [0, 1],
-      s: [0, 1],
-      arrowleft: [-1, 0],
-      a: [-1, 0],
-      arrowright: [1, 0],
-      d: [1, 0]
+    const SCENES = {
+      roomCold: [
+        '      _____________      ',
+        '     /            /|     ',
+        '    /____________/ |     ',
+        '    |    ...     | |     ',
+        '    |   (   )    | |     ',
+        '    |    ) (     | |     ',
+        '    |   (   )    | /     ',
+        '    |____)__(____|/      ',
+        '        (   )           ',
+        '         ) (            ',
+        '        (   )           ',
+        '         ---            '
+      ],
+      roomWarm: [
+        '      _____________      ',
+        '     /            /|     ',
+        '    /____________/ |     ',
+        '    |   .-""-.   | |     ',
+        '    |  (  () )   | |     ',
+        '    |   \ || /   | |     ',
+        '    |    \__/    | /     ',
+        '    |____/__\____|/      ',
+        '       _/    \_         ',
+        '      /  /\    \        ',
+        '     /__/  \____\       ',
+        '         /  \           '
+      ],
+      roomBright: [
+        '      _____________      ',
+        '     /            /|     ',
+        '    /____________/ |     ',
+        '    |   .----.   | |     ',
+        '    |  (====)    | |     ',
+        '    |   \__/     | |     ',
+        '    |  / /\\ \    | /     ',
+        '    |_/______\___|/      ',
+        '      /  /\  \          ',
+        '     /__/  \__\         ',
+        '        /\              ',
+        '       /__\             '
+      ],
+      village: [
+        '        /\\    /\\       ',
+        '   /\  /  \\  /  \\   /\ ',
+        '  /  \\/____\\/____\\ /  \\',
+        ' /____\\ ||  || ||  /____\\',
+        ' |    || ||  || ||  |    ||',
+        ' |[]  || ||  || ||  |  []||',
+        ' |____||_||__||_||__|____||',
+        '   ||    ||    ||    ||   ',
+        '  _||____||____||____||_  ',
+        ' /______________________\ ',
+        ' |  fires   fields   forge |',
+        ' |________________________|'
+      ],
+      dungeon: [
+        '#########################',
+        '#    ___        ___     #',
+        '#   |   |      |   |    #',
+        '#   | []|  __  |[] |    #',
+        '#   |___| |  | |___|    #',
+        '#        |  |          #',
+        '#   /\   |__|   /\      #',
+        '#  /__\        /__\     #',
+        '#      ________         #',
+        '#     |  __  | |        #',
+        '#     | |  | | |        #',
+        '#########################'
+      ]
     };
-    const KEY_TO_AIM = {
-      i: [0, -1],
-      k: [0, 1],
-      j: [-1, 0],
-      l: [1, 0]
-    };
-    const ATTACK_KEYS = new Set([' ', 'f']);
-    const HANDLED_KEYS = new Set([
-      ...Object.keys(KEY_TO_MOVE),
-      ...Object.keys(KEY_TO_AIM),
-      ...ATTACK_KEYS
-    ]);
 
     const game = {
-      floor: 1,
-      levelInFloor: 1,
-      levelsPerFloor: 1,
+      phase: 'room',
       turn: 0,
-      player: { x: 0, y: 0, hp: PLAYER_MAX_HP, aim: [1, 0] },
-      weapon: { name: 'Laser Carbine', damage: 1 },
-      map: null,
-      enemies: [],
-      projectiles: [],
-      message: ''
+      fire: 0,
+      resources: { wood: 0, food: 0, hide: 0, iron: 0, relics: 0 },
+      buildings: { huts: 0, lodge: false, smithy: false, guild: false, shrine: false },
+      villagers: 0,
+      villagerCap: 0,
+      adventurers: [],
+      gearLevel: 0,
+      blessing: 0,
+      dungeon: { depth: 0 },
+      log: ['You wake in a cold, dark room. The embers are asleep.']
     };
+
+    let currentActions = [];
 
     function randomInt(min, max) {
       return Math.floor(Math.random() * (max - min + 1)) + min;
     }
 
-    function isWallPosition(x, y, width, height) {
-      return x === 0 || y === 0 || x === width - 1 || y === height - 1;
+    function rollDie(sides) {
+      return randomInt(1, sides);
     }
 
-    function getManhattanDistance(ax, ay, bx, by) {
-      return Math.abs(ax - bx) + Math.abs(ay - by);
+    function addLog(text) {
+      game.log.unshift(text);
+      if (game.log.length > 4) game.log.pop();
     }
 
-    function randomEnemyKind() {
-      return Math.random() < RANGED_SPAWN_PROBABILITY ? 'ranged' : 'melee';
+    function hasResources(costs) {
+      return Object.entries(costs).every(([key, value]) => game.resources[key] >= value);
     }
 
-    function isInsideMap(x, y) {
-      return !!game.map && x >= 0 && y >= 0 && x < game.map.width && y < game.map.height;
-    }
-
-    function tileAt(x, y) {
-      if (!isInsideMap(x, y)) return WALL;
-      return game.map.tiles[y][x];
-    }
-
-    function isBlockingTile(tile) {
-      return tile === WALL || tile === OBSTACLE;
-    }
-
-    function canWalk(x, y) {
-      const tile = tileAt(x, y);
-      return tile !== WALL && tile !== OBSTACLE;
-    }
-
-    function enemyAt(x, y) {
-      return game.enemies.find((enemy) => enemy.x === x && enemy.y === y);
-    }
-
-    function isOccupied(x, y) {
-      if (game.player.x === x && game.player.y === y) return true;
-      return Boolean(enemyAt(x, y));
-    }
-
-    function findOpenTile({
-      minX = 1,
-      maxX = game.map.width - 2,
-      minY = 1,
-      maxY = game.map.height - 2,
-      avoid = [],
-      minDistance = 0,
-      label = 'entity'
-    } = {}) {
-      const safeMinX = Math.min(minX, maxX);
-      const safeMaxX = Math.max(minX, maxX);
-      const safeMinY = Math.min(minY, maxY);
-      const safeMaxY = Math.max(minY, maxY);
-      for (let tries = 0; tries < MAX_PLACEMENT_TRIES; tries += 1) {
-        const x = randomInt(safeMinX, safeMaxX);
-        const y = randomInt(safeMinY, safeMaxY);
-        if (!canWalk(x, y)) continue;
-        if (isOccupied(x, y)) continue;
-        if (avoid.some((spot) => getManhattanDistance(x, y, spot.x, spot.y) < minDistance)) {
-          continue;
-        }
-        return { x, y };
-      }
-      for (let y = safeMinY; y <= safeMaxY; y += 1) {
-        for (let x = safeMinX; x <= safeMaxX; x += 1) {
-          if (!canWalk(x, y)) continue;
-          if (isOccupied(x, y)) continue;
-          if (avoid.some((spot) => getManhattanDistance(x, y, spot.x, spot.y) < minDistance)) {
-            continue;
-          }
-          return { x, y };
-        }
-      }
-      for (let y = 1; y < game.map.height - 1; y += 1) {
-        for (let x = 1; x < game.map.width - 1; x += 1) {
-          if (!canWalk(x, y)) continue;
-          if (isOccupied(x, y)) continue;
-          return { x, y };
-        }
-      }
-      const walkableTiles = game.map.tiles.flat().filter((tile) => tile === FLOOR || tile === EXIT).length;
-      throw new Error(
-        `No open tiles available for ${label} placement on map (${game.map.width}x${game.map.height}). ` +
-        `Walkable tiles: ${walkableTiles}.`
-      );
-    }
-
-    function clearExit() {
-      for (let y = 0; y < game.map.height; y += 1) {
-        for (let x = 0; x < game.map.width; x += 1) {
-          if (game.map.tiles[y][x] === EXIT) game.map.tiles[y][x] = FLOOR;
-        }
-      }
-    }
-
-    function placeExit() {
-      clearExit();
-      const exitSpot = findOpenTile({
-        avoid: [{ x: game.player.x, y: game.player.y }],
-        minDistance: Math.floor(game.map.width / EXIT_MIN_DISTANCE_DIVISOR),
-        label: 'exit'
-      });
-      game.map.tiles[exitSpot.y][exitSpot.x] = EXIT;
-    }
-
-    function placePlayer() {
-      const minX = 1;
-      const playerSpawnLimitX = Math.max(PLAYER_SPAWN_LIMIT_MIN_X, Math.floor(game.map.width / SPAWN_WIDTH_DIVISOR));
-      const maxX = Math.max(minX, playerSpawnLimitX);
-      const spawn = findOpenTile({ minX, maxX, label: 'player' });
-      game.player.x = spawn.x;
-      game.player.y = spawn.y;
-    }
-
-    function placeObstacles() {
-      const area = game.map.width * game.map.height;
-      const obstacleCount = Math.max(MIN_OBSTACLE_COUNT, Math.floor(area * OBSTACLE_DENSITY));
-      let placed = 0;
-      let attempts = 0;
-      while (placed < obstacleCount && attempts < MAX_OBSTACLE_PLACEMENT_TRIES) {
-        attempts += 1;
-        const x = randomInt(1, game.map.width - 2);
-        const y = randomInt(1, game.map.height - 2);
-        if (game.map.tiles[y][x] !== FLOOR) continue;
-        game.map.tiles[y][x] = OBSTACLE;
-        placed += 1;
-      }
-    }
-
-    function createMap(width, height) {
-      const tiles = Array.from({ length: height }, (_, y) =>
-        Array.from({ length: width }, (_, x) => (isWallPosition(x, y, width, height) ? WALL : FLOOR))
-      );
-      game.map = { width, height, tiles };
-      placeObstacles();
-    }
-
-    function spawnEnemies() {
-      const area = game.map.width * game.map.height;
-      const maxEnemies = Math.min(MAX_ENEMY_CAP, Math.max(2, Math.floor(area / ENEMY_AREA_PER_SPAWN)));
-      const enemyCount = randomInt(2, maxEnemies);
-      // Ensure each level spawns at least one melee and one ranged enemy.
-      const types = ['melee', 'ranged'];
-      while (types.length < enemyCount) {
-        types.push(randomEnemyKind());
-      }
-      game.enemies = types.map((kind) => {
-        const spawn = findOpenTile({
-          minX: Math.floor(game.map.width / SPAWN_WIDTH_DIVISOR),
-          avoid: [{ x: game.player.x, y: game.player.y }],
-          minDistance: MIN_ENEMY_SPAWN_DISTANCE,
-          label: 'enemy'
-        });
-        return {
-          kind,
-          type: kind === 'melee' ? 'Bruiser' : 'Gunner',
-          x: spawn.x,
-          y: spawn.y,
-          hp: kind === 'melee' ? 4 : 3,
-          dmg: 1,
-          cooldown: RANGED_COOLDOWN_TURNS
-        };
+    function spendResources(costs) {
+      Object.entries(costs).forEach(([key, value]) => {
+        game.resources[key] = Math.max(0, game.resources[key] - value);
       });
     }
 
-    function generateFloor() {
-      const width = randomInt(MIN_WIDTH, MAX_WIDTH);
-      const height = randomInt(MIN_HEIGHT, MAX_HEIGHT);
-      createMap(width, height);
-      placePlayer();
-      placeExit();
-      game.levelsPerFloor = randomInt(MIN_LEVELS_PER_FLOOR, MAX_LEVELS_PER_FLOOR);
-      game.levelInFloor = 1;
-      game.projectiles = [];
-      spawnEnemies();
-      game.message = `Floor ${game.floor} begins. ${game.levelsPerFloor} levels to clear.`;
+    function generateName() {
+      const base = NAMES[randomInt(0, NAMES.length - 1)];
+      const epithet = EPITHETS[randomInt(0, EPITHETS.length - 1)];
+      return `${base} ${epithet}`;
     }
 
-    function advanceLevel() {
-      if (game.levelInFloor < game.levelsPerFloor) {
-        game.levelInFloor += 1;
-        placeExit();
-        game.projectiles = [];
-        spawnEnemies();
-        game.message = `Level ${game.levelInFloor}/${game.levelsPerFloor} on floor ${game.floor}. New enemies arrive.`;
-      } else {
-        game.floor += 1;
-        game.levelInFloor = 1;
-        generateFloor();
-        game.message = `You reach floor ${game.floor}. A new map unfolds.`;
+    function partyPower() {
+      return game.adventurers.reduce((sum, hero) => sum + hero.power, 0);
+    }
+
+    function advanceTurn() {
+      game.turn += 1;
+      if (game.phase === 'room' && game.fire > 0 && game.turn % 3 === 0) {
+        game.fire -= 1;
+        addLog('The hearth cools, shadows returning to the corners.');
       }
     }
 
-    function resetGame() {
-      game.floor = 1;
-      game.player.hp = PLAYER_MAX_HP;
-      game.player.aim = [1, 0];
-      generateFloor();
-      game.message = 'You fell. Restarting at floor 1.';
+    function roomScene() {
+      if (game.fire <= 0) return SCENES.roomCold;
+      if (game.fire <= 2) return SCENES.roomWarm;
+      return SCENES.roomBright;
     }
 
-    function tryMove(dx, dy) {
-      const nx = game.player.x + dx;
-      const ny = game.player.y + dy;
-      if (canWalk(nx, ny) && !enemyAt(nx, ny)) {
-        game.player.x = nx;
-        game.player.y = ny;
-        if (tileAt(nx, ny) === EXIT) {
-          advanceLevel();
-          render();
-          return;
-        }
-        enemyTurn();
+    function getScene() {
+      if (game.phase === 'room') return roomScene();
+      if (game.phase === 'village') return SCENES.village;
+      return SCENES.dungeon;
+    }
+
+    function gatherWood() {
+      const gained = randomInt(1, 3);
+      game.resources.wood += gained;
+      if (Math.random() < 0.25) game.resources.food += 1;
+      addLog(`You search the darkness. +${gained} wood.`);
+    }
+
+    function stokeFire() {
+      spendResources({ wood: 1 });
+      game.fire = Math.min(4, game.fire + 1);
+      addLog('The fire catches, breathing a little warmth back into the room.');
+    }
+
+    function rest() {
+      const mood = game.fire > 0 ? 'You warm your hands, listening to the crackle.' : 'The cold gnaws at your bones.';
+      addLog(mood);
+    }
+
+    function buildFirstHut() {
+      spendResources({ wood: 8 });
+      game.buildings.huts = 1;
+      game.villagers = 1;
+      game.villagerCap = 2;
+      game.phase = 'village';
+      addLog('A hut rises outside. A lone settler answers the light.');
+    }
+
+    function chopWood() {
+      const gained = randomInt(1, 2) + Math.floor(game.villagers / 2);
+      game.resources.wood += gained;
+      addLog(`Axes ring in the treeline. +${gained} wood.`);
+    }
+
+    function hunt() {
+      const food = randomInt(1, 2) + Math.floor(game.villagers / 3);
+      const hide = Math.random() < (game.buildings.lodge ? 0.6 : 0.3) ? 1 : 0;
+      game.resources.food += food;
+      game.resources.hide += hide;
+      addLog(`Hunters return with provisions. +${food} food${hide ? ' and hides.' : '.'}`);
+    }
+
+    function scavenge() {
+      const iron = randomInt(0, 1) + (Math.random() < 0.35 ? 1 : 0);
+      const relic = Math.random() < 0.18 ? 1 : 0;
+      game.resources.iron += iron;
+      game.resources.relics += relic;
+      addLog(`Scavengers pick through old ruins. +${iron} iron${relic ? ' and a relic.' : '.'}`);
+    }
+
+    function buildHut() {
+      spendResources({ wood: 12 });
+      game.buildings.huts += 1;
+      game.villagerCap += 2;
+      addLog('Another hut is raised, the village growing bolder.');
+    }
+
+    function callSettlers() {
+      spendResources({ food: 5 });
+      game.villagers += 1;
+      addLog('A weary traveler joins the settlement.');
+    }
+
+    function buildLodge() {
+      spendResources({ wood: 20, hide: 6 });
+      game.buildings.lodge = true;
+      addLog('A hunters\' lodge stands ready. The wilds feel less hostile.');
+    }
+
+    function buildSmithy() {
+      spendResources({ wood: 25, iron: 6 });
+      game.buildings.smithy = true;
+      addLog('The smithy roars to life with sparks and steel.');
+    }
+
+    function buildGuild() {
+      spendResources({ wood: 25, iron: 10, food: 12 });
+      game.buildings.guild = true;
+      addLog('A guildhall opens its doors. Adventurers gather.');
+    }
+
+    function buildShrine() {
+      spendResources({ wood: 18, relics: 2 });
+      game.buildings.shrine = true;
+      addLog('A shrine of old runes hums with forgotten power.');
+    }
+
+    function recruitAdventurer() {
+      spendResources({ food: 6, wood: 4 });
+      const template = CLASS_TEMPLATES[randomInt(0, CLASS_TEMPLATES.length - 1)];
+      const name = generateName();
+      game.adventurers.push({
+        name,
+        className: template.name,
+        hp: template.hp,
+        maxHp: template.hp,
+        power: template.power
+      });
+      addLog(`${name} the ${template.name} joins the guild.`);
+    }
+
+    function forgeGear() {
+      spendResources({ iron: 4, hide: 2 });
+      game.gearLevel += 1;
+      addLog('New gear is forged. The party feels stronger.');
+    }
+
+    function pray() {
+      spendResources({ relics: 1 });
+      game.blessing = randomInt(1, 3);
+      addLog(`A blessing settles over the village (+${game.blessing} to the next delve).`);
+    }
+
+    function enterDungeon() {
+      game.phase = 'dungeon';
+      addLog('The party descends into the old stone. Torches flare.');
+    }
+
+    function retreat() {
+      game.phase = 'village';
+      addLog('You retreat to the village, hauling your spoils.');
+    }
+
+    function camp() {
+      spendResources({ food: 3 });
+      game.adventurers.forEach((hero) => {
+        const heal = hero.className === 'Cleric' ? 2 : 1;
+        hero.hp = Math.min(hero.maxHp, hero.hp + heal);
+      });
+      addLog('A camp is made. Wounds are bound and prayers whispered.');
+    }
+
+    function hurtRandomAdventurer(damage) {
+      if (game.adventurers.length === 0) return null;
+      const index = randomInt(0, game.adventurers.length - 1);
+      const hero = game.adventurers[index];
+      hero.hp -= damage;
+      if (hero.hp <= 0) {
+        game.adventurers.splice(index, 1);
+        return `${hero.name} falls in the dark.`;
       }
-      render();
+      return `${hero.name} suffers ${damage} damage.`;
     }
 
-    function fireLaser(dx, dy) {
-      if (dx === 0 && dy === 0) {
-        game.message = 'Aim the laser before firing.';
-        render();
+    function delve() {
+      if (game.adventurers.length === 0) {
+        addLog('No one remains to brave the depths.');
+        retreat();
         return;
       }
-      let hits = 0;
-      let x = game.player.x + dx;
-      let y = game.player.y + dy;
-      while (isInsideMap(x, y)) {
-        const tile = tileAt(x, y);
-        if (isBlockingTile(tile)) break;
-        const enemy = enemyAt(x, y);
-        if (enemy) {
-          enemy.hp -= game.weapon.damage;
-          hits += 1;
-        }
-        x += dx;
-        y += dy;
-      }
-      game.enemies = game.enemies.filter((enemy) => enemy.hp > 0);
-      if (hits > 0) {
-        game.message = hits === 1 ? 'Laser hits its mark.' : `Laser hits ${hits} targets.`;
+      const nextDepth = game.dungeon.depth + 1;
+      const roll = rollDie(20);
+      const power = partyPower() + game.gearLevel;
+      const blessing = game.blessing;
+      game.blessing = 0;
+      const threat = 6 + Math.floor(nextDepth / 2);
+      const total = roll + power + blessing;
+      game.dungeon.depth = nextDepth;
+
+      let outcome = `Depth ${nextDepth}: you roll ${roll}`;
+      if (blessing > 0) outcome += ` (+${blessing} blessing)`;
+      outcome += `, power ${power}, total ${total}.`;
+
+      if (roll === 1) {
+        const loss = hurtRandomAdventurer(3);
+        addLog(`${outcome} A catastrophic trap springs. ${loss}`);
+      } else if (total < threat) {
+        const loss = hurtRandomAdventurer(2);
+        addLog(`${outcome} The denizens overwhelm you. ${loss}`);
+      } else if (total < threat + 6) {
+        const food = randomInt(1, 3);
+        const iron = randomInt(0, 2);
+        game.resources.food += food;
+        game.resources.iron += iron;
+        addLog(`${outcome} You win a scrappy fight. +${food} food, +${iron} iron.`);
       } else {
-        game.message = 'Laser streaks through the halls.';
+        const relics = roll === 20 ? 2 : 1;
+        const iron = randomInt(1, 3);
+        game.resources.relics += relics;
+        game.resources.iron += iron;
+        addLog(`${outcome} A legendary victory! +${relics} relics, +${iron} iron.`);
       }
-      if (game.enemies.length === 0) {
-        game.message += ` The level is clear—find ${EXIT} to advance.`;
-      }
-      enemyTurn();
-      render();
-    }
 
-    function shootProjectile(enemy) {
-      const dx = Math.sign(game.player.x - enemy.x);
-      const dy = Math.sign(game.player.y - enemy.y);
-      if (dx === 0 && dy === 0) return false;
-      const startX = enemy.x + dx;
-      const startY = enemy.y + dy;
-      if (!isInsideMap(startX, startY)) return false;
-      if (isBlockingTile(tileAt(startX, startY))) return false;
-      game.projectiles.push({ x: startX, y: startY, dx, dy, dmg: enemy.dmg });
-      return true;
-    }
-
-    function advanceProjectiles() {
-      if (game.projectiles.length === 0) return;
-      const remaining = [];
-      for (const projectile of game.projectiles) {
-        const nx = projectile.x + projectile.dx;
-        const ny = projectile.y + projectile.dy;
-        if (!isInsideMap(nx, ny)) continue;
-        const tile = tileAt(nx, ny);
-        if (isBlockingTile(tile)) continue;
-        if (game.player.x === nx && game.player.y === ny) {
-          game.player.hp -= projectile.dmg;
-          game.message = `You are hit by a shot! HP: ${game.player.hp}`;
-          if (game.player.hp <= 0) {
-            resetGame();
-            return true;
-          }
-          continue;
-        }
-        projectile.x = nx;
-        projectile.y = ny;
-        remaining.push(projectile);
-      }
-      game.projectiles = remaining;
-      return false;
-    }
-
-    function moveEnemyToward(enemy, dx, dy) {
-      const stepOptions = [];
-      if (dx !== 0) stepOptions.push([dx, 0]);
-      if (dy !== 0) stepOptions.push([0, dy]);
-      for (const [sx, sy] of stepOptions) {
-        const nx = enemy.x + sx;
-        const ny = enemy.y + sy;
-        if (canWalk(nx, ny) && !isOccupied(nx, ny)) {
-          enemy.x = nx;
-          enemy.y = ny;
-          break;
-        }
+      if (game.adventurers.length === 0) {
+        addLog('The dungeon claims the last of your heroes.');
+        retreat();
       }
     }
 
-    function enemyTurn() {
-      game.turn += 1;
-      const reset = advanceProjectiles();
-      if (reset) return;
-      if (game.enemies.length === 0) return;
-      for (const enemy of game.enemies) {
-        const dx = Math.sign(game.player.x - enemy.x);
-        const dy = Math.sign(game.player.y - enemy.y);
-        const inMeleeRange = getManhattanDistance(game.player.x, game.player.y, enemy.x, enemy.y) === 1;
-        if (inMeleeRange) {
-          game.player.hp -= enemy.dmg;
-          game.message = `${enemy.type} strikes you. HP: ${game.player.hp}`;
-          if (game.player.hp <= 0) {
-            resetGame();
-            return;
-          }
-          continue;
-        }
-        if (enemy.kind === 'ranged') {
-          if (enemy.cooldown > 0) {
-            enemy.cooldown -= 1;
-          }
-          if (enemy.cooldown === 0) {
-            const fired = shootProjectile(enemy);
-            if (fired) {
-              enemy.cooldown = RANGED_COOLDOWN_TURNS;
-              game.message = `${enemy.type} fires a shot!`;
-              continue;
-            }
-          }
-        }
-        moveEnemyToward(enemy, dx, dy);
+    function getActions() {
+      const actions = [];
+
+      if (game.phase === 'room') {
+        actions.push({
+          label: 'Search the dark (gain wood)',
+          enabled: true,
+          run: gatherWood
+        });
+        actions.push({
+          label: 'Stoke the fire (1 wood)',
+          enabled: game.resources.wood >= 1,
+          run: stokeFire
+        });
+        actions.push({
+          label: 'Sit and listen',
+          enabled: true,
+          run: rest
+        });
+        actions.push({
+          label: 'Build a hut (8 wood, fire ≥ 1)',
+          enabled: game.resources.wood >= 8 && game.fire >= 1,
+          run: buildFirstHut
+        });
       }
+
+      if (game.phase === 'village') {
+        actions.push({ label: 'Chop wood', enabled: game.villagers > 0, run: chopWood });
+        actions.push({ label: 'Hunt', enabled: game.villagers > 0, run: hunt });
+        actions.push({ label: 'Scavenge ruins', enabled: game.villagers > 1, run: scavenge });
+        actions.push({
+          label: 'Build hut (12 wood)',
+          enabled: game.resources.wood >= 12,
+          run: buildHut
+        });
+        actions.push({
+          label: 'Call settlers (5 food)',
+          enabled: game.resources.food >= 5 && game.villagers < game.villagerCap,
+          run: callSettlers
+        });
+        if (!game.buildings.lodge) {
+          actions.push({
+            label: 'Build lodge (20 wood, 6 hide)',
+            enabled: hasResources({ wood: 20, hide: 6 }),
+            run: buildLodge
+          });
+        }
+        if (!game.buildings.smithy) {
+          actions.push({
+            label: 'Build smithy (25 wood, 6 iron)',
+            enabled: hasResources({ wood: 25, iron: 6 }),
+            run: buildSmithy
+          });
+        }
+        if (!game.buildings.guild) {
+          actions.push({
+            label: 'Build guildhall (25 wood, 10 iron, 12 food)',
+            enabled: hasResources({ wood: 25, iron: 10, food: 12 }),
+            run: buildGuild
+          });
+        }
+        if (!game.buildings.shrine) {
+          actions.push({
+            label: 'Build shrine (18 wood, 2 relics)',
+            enabled: hasResources({ wood: 18, relics: 2 }),
+            run: buildShrine
+          });
+        }
+        if (game.buildings.guild) {
+          actions.push({
+            label: 'Recruit adventurer (6 food, 4 wood)',
+            enabled: hasResources({ food: 6, wood: 4 }),
+            run: recruitAdventurer
+          });
+        }
+        if (game.buildings.smithy) {
+          actions.push({
+            label: 'Forge gear (4 iron, 2 hide)',
+            enabled: hasResources({ iron: 4, hide: 2 }),
+            run: forgeGear
+          });
+        }
+        if (game.buildings.shrine) {
+          actions.push({
+            label: 'Seek blessing (1 relic)',
+            enabled: hasResources({ relics: 1 }),
+            run: pray
+          });
+        }
+        actions.push({
+          label: 'Enter the dungeon',
+          enabled: game.adventurers.length > 0,
+          run: enterDungeon
+        });
+      }
+
+      if (game.phase === 'dungeon') {
+        actions.push({ label: 'Delve deeper', enabled: game.adventurers.length > 0, run: delve });
+        actions.push({ label: 'Make camp (3 food)', enabled: hasResources({ food: 3 }), run: camp });
+        actions.push({ label: 'Retreat to village', enabled: true, run: retreat });
+      }
+
+      return actions;
     }
 
-    function render() {
-      const rows = [];
-      for (let y = 0; y < game.map.height; y++) {
-        let row = '';
-        for (let x = 0; x < game.map.width; x++) {
-          let ch = tileAt(x, y);
-          const projectile = game.projectiles.find((shot) => shot.x === x && shot.y === y);
-          if (projectile) ch = PROJECTILE_CHAR;
-          const enemy = enemyAt(x, y);
-          if (enemy) ch = ENEMY_CHARS[enemy.kind];
-          if (game.player.x === x && game.player.y === y) ch = PLAYER_CHAR;
-          row += ch;
-        }
-        rows.push(row);
-      }
+    function renderHud() {
+      const { wood, food, hide, iron, relics } = game.resources;
+      const village = game.phase === 'room'
+        ? `Hearth: ${game.fire}`
+        : `Villagers: ${game.villagers}/${game.villagerCap} | Gear: +${game.gearLevel}`;
+      const party = `Adventurers: ${game.adventurers.length} | Depth: ${game.dungeon.depth}`;
       document.getElementById('hud').textContent =
-        `Floor: ${game.floor} | Level: ${game.levelInFloor}/${game.levelsPerFloor} | HP: ${game.player.hp} | Weapon: ${game.weapon.name} | Enemies: ${game.enemies.length}`;
-      document.getElementById('screen').textContent = rows.join('\n') + `\n\n${game.message}`;
+        `Wood ${wood} • Food ${food} • Hide ${hide} • Iron ${iron} • Relics ${relics} • ${village} • ${party}`;
+    }
+
+    function renderScreen() {
+      const scene = getScene();
+      const status = [
+        `Turn ${game.turn} • Phase: ${game.phase.toUpperCase()}`,
+        game.phase === 'room'
+          ? 'The room is quiet. The world outside is waiting.'
+          : 'The village listens for the next tale from the dungeon.',
+        ''
+      ];
+
+      const partyLines = game.adventurers.length === 0
+        ? ['No adventurers yet.']
+        : game.adventurers.map((hero) =>
+            `${hero.name} the ${hero.className} (HP ${hero.hp}/${hero.maxHp}, Power ${hero.power})`
+          );
+
+      const logLines = ['--- Whispers ---', ...game.log.map((line) => `• ${line}`)];
+
+      document.getElementById('screen').textContent =
+        [...scene, '', ...status, ...partyLines, '', ...logLines].join('\n');
     }
 
     function renderControls() {
-      const moveKeys = Object.keys(KEY_TO_MOVE);
-      const arrowKeys = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
-      const wasdKeys = ['w', 'a', 's', 'd'];
-      const moveParts = [];
-      if (wasdKeys.every((key) => moveKeys.includes(key))) moveParts.push('WASD');
-      if (arrowKeys.every((key) => moveKeys.includes(key))) moveParts.push('Arrow Keys');
-      const attackKeys = Array.from(ATTACK_KEYS).map((key) => key === ' ' ? 'Space' : key.toUpperCase());
-      document.getElementById('controls').textContent =
-        `Move: ${moveParts.join('/')} • Fire laser: ${attackKeys.join('/')} (uses last move direction) ` +
-        `• Aim+fire (one key): I/J/K/L (↑/←/↓/→) • Reach ${EXIT} to clear levels; finishing all levels advances to the next floor.`;
+      const controls = document.getElementById('controls');
+      controls.innerHTML = '';
+      const actions = getActions().slice(0, ACTION_KEYS.length);
+      currentActions = actions.map((action, index) => ({ ...action, key: ACTION_KEYS[index] }));
+
+      currentActions.forEach((action) => {
+        const button = document.createElement('button');
+        button.disabled = !action.enabled;
+        button.textContent = `[${action.key}] ${action.label}`;
+        button.addEventListener('click', () => performAction(action));
+        controls.appendChild(button);
+      });
+
+      const hint = document.createElement('div');
+      hint.className = 'hint';
+      hint.textContent = 'Click an action or press its key to act.';
+      controls.appendChild(hint);
+    }
+
+    function performAction(action) {
+      if (!action.enabled) return;
+      action.run();
+      advanceTurn();
+      render();
     }
 
     window.addEventListener('keydown', (event) => {
       const key = event.key.toLowerCase();
-      if (HANDLED_KEYS.has(key)) {
+      const action = currentActions.find((entry) => entry.key === key);
+      if (action) {
         event.preventDefault();
-      }
-      if (KEY_TO_MOVE[key]) {
-        const [dx, dy] = KEY_TO_MOVE[key];
-        game.player.aim = [dx, dy];
-        tryMove(dx, dy);
-      } else if (KEY_TO_AIM[key]) {
-        const [dx, dy] = KEY_TO_AIM[key];
-        game.player.aim = [dx, dy];
-        fireLaser(dx, dy);
-      } else if (ATTACK_KEYS.has(key)) {
-        const [dx, dy] = game.player.aim;
-        fireLaser(dx, dy);
+        performAction(action);
       }
     });
 
-    generateFloor();
-    renderControls();
+    function render() {
+      renderHud();
+      renderScreen();
+      renderControls();
+    }
+
     render();
   </script>
 </body>
