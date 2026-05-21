@@ -25,7 +25,7 @@
     }
     pre {
       margin: 0;
-      min-height: 280px;
+      min-height: 430px;
       line-height: 1.2;
       font-size: 15px;
       white-space: pre;
@@ -90,76 +90,78 @@
     const NAMES = ['Ari', 'Borin', 'Cora', 'Dain', 'Elara', 'Fenn', 'Greer', 'Hale', 'Iona', 'Jora'];
     const EPITHETS = ['the Bold', 'the Quiet', 'the Keen', 'the Stalwart', 'the Ember', 'the Rune'];
 
+    const LOG_LIMIT = 12;
+
     const SCENES = {
       roomCold: [
-        '      _____________      ',
-        '     /            /|     ',
-        '    /____________/ |     ',
-        '    |    ...     | |     ',
-        '    |   (   )    | |     ',
-        '    |    ) (     | |     ',
-        '    |   (   )    | /     ',
-        '    |____)__(____|/      ',
-        '        (   )           ',
-        '         ) (            ',
-        '        (   )           ',
-        '         ---            '
+        '+-----------------------+',
+        '|  ##  ##      ##   ##  |',
+        '|  ##  ##      ##   ##  |',
+        '|                       |',
+        '|      ..........       |',
+        '|      .  ash   .       |',
+        '|      . hearth .       |',
+        '|      ..........       |',
+        '|                       |',
+        '|  door ->      stash   |',
+        '|                       |',
+        '+-----------------------+'
       ],
       roomWarm: [
-        '      _____________      ',
-        '     /            /|     ',
-        '    /____________/ |     ',
-        '    |   .-""-.   | |     ',
-        '    |  (  () )   | |     ',
-        '    |   \ || /   | |     ',
-        '    |    \__/    | /     ',
-        '    |____/__\____|/      ',
-        '       _/    \_         ',
-        '      /  /\    \        ',
-        '     /__/  \____\       ',
-        '         /  \           '
+        '+-----------------------+',
+        '|  ##  ##      ##   ##  |',
+        '|  ##  ##      ##   ##  |',
+        '|                       |',
+        '|      ..........       |',
+        '|      . flame  .       |',
+        '|      . hearth .       |',
+        '|      ..........       |',
+        '|       sparks *        |',
+        '|  door ->      stash   |',
+        '|                       |',
+        '+-----------------------+'
       ],
       roomBright: [
-        '      _____________      ',
-        '     /            /|     ',
-        '    /____________/ |     ',
-        '    |   .----.   | |     ',
-        '    |  (====)    | |     ',
-        '    |   \__/     | |     ',
-        '    |  / /\\ \    | /     ',
-        '    |_/______\___|/      ',
-        '      /  /\  \          ',
-        '     /__/  \__\         ',
-        '        /\              ',
-        '       /__\             '
+        '+-----------------------+',
+        '|  ##  ##      ##   ##  |',
+        '|  ##  ##      ##   ##  |',
+        '|   torch   path   torch|',
+        '|      ..........       |',
+        '|      . blaze  .       |',
+        '|      . hearth .       |',
+        '|      ..........       |',
+        '|      light pools      |',
+        '|  door ->      stash   |',
+        '|                       |',
+        '+-----------------------+'
       ],
       village: [
-        '        /\\    /\\       ',
-        '   /\  /  \\  /  \\   /\ ',
-        '  /  \\/____\\/____\\ /  \\',
-        ' /____\\ ||  || ||  /____\\',
-        ' |    || ||  || ||  |    ||',
-        ' |[]  || ||  || ||  |  []||',
-        ' |____||_||__||_||__|____||',
-        '   ||    ||    ||    ||   ',
-        '  _||____||____||____||_  ',
-        ' /______________________\ ',
-        ' |  fires   fields   forge |',
-        ' |________________________|'
+        '+-----------------------+',
+        '| gate   road===road    |',
+        '|  H   H   well   H     |',
+        '|  H   H         H H    |',
+        '|=====market square=====|',
+        '| field  field   lodge  |',
+        '| field  pen     smith  |',
+        '| shrine  guild  barns  |',
+        '|                       |',
+        '| trail to dungeon -->  |',
+        '|                       |',
+        '+-----------------------+'
       ],
       dungeon: [
-        '#########################',
-        '#    ___        ___     #',
-        '#   |   |      |   |    #',
-        '#   | []|  __  |[] |    #',
-        '#   |___| |  | |___|    #',
-        '#        |  |          #',
-        '#   /\   |__|   /\      #',
-        '#  /__\        /__\     #',
-        '#      ________         #',
-        '#     |  __  | |        #',
-        '#     | |  | | |        #',
-        '#########################'
+        '+-----------------------+',
+        '| stairs ^   trap x     |',
+        '|#######---#####---#####|',
+        '|# room #...# pit #...# |',
+        '|#######---#####---#####|',
+        '|   corridor   ooze     |',
+        '|#####---########---####|',
+        '|#crypt#...#hall#...#  #|',
+        '|#####---########---####|',
+        '| relic?   boss lair !  |',
+        '| exit <--- route ----  |',
+        '+-----------------------+'
       ]
     };
 
@@ -190,7 +192,7 @@
 
     function addLog(text) {
       game.log.unshift(text);
-      if (game.log.length > 4) game.log.pop();
+      if (game.log.length > LOG_LIMIT) game.log.pop();
     }
 
     function hasResources(costs) {
@@ -218,6 +220,41 @@
       if (game.phase === 'room' && game.fire > 0 && game.turn % 3 === 0) {
         game.fire -= 1;
         addLog('The hearth cools, shadows returning to the corners.');
+      }
+
+      if (game.turn % 2 === 0) {
+        const mouths = game.villagers + game.adventurers.length;
+        if (mouths > 0) {
+          const needed = Math.max(1, Math.ceil(mouths / 3));
+          const consumed = Math.min(game.resources.food, needed);
+          game.resources.food -= consumed;
+
+          if (consumed === needed) {
+            addLog(`Rations are shared by firelight (-${consumed} food).`);
+          } else {
+            let shortage = needed - consumed;
+            const starvedVillagers = Math.min(shortage, game.villagers);
+            game.villagers -= starvedVillagers;
+            shortage -= starvedVillagers;
+
+            const hungerHits = [];
+            while (shortage > 0 && game.adventurers.length > 0) {
+              hungerHits.push(hurtRandomAdventurer(1));
+              shortage -= 1;
+            }
+
+            const villagerLoss = starvedVillagers > 0
+              ? `${starvedVillagers} villager${starvedVillagers === 1 ? '' : 's'} starve. `
+              : '';
+            const heroLoss = hungerHits.filter(Boolean).join(' ');
+            addLog(`Food stores run dry (-${consumed} food). ${villagerLoss}${heroLoss || 'Hunger stalks the camp.'}`);
+
+            if (game.phase === 'dungeon' && game.adventurers.length === 0) {
+              addLog('Starvation breaks the expedition.');
+              retreat();
+            }
+          }
+        }
       }
     }
 
@@ -387,7 +424,7 @@
       const power = partyPower() + game.gearLevel;
       const blessing = game.blessing;
       game.blessing = 0;
-      const threat = 6 + Math.floor(nextDepth / 2);
+      const threat = 7 + nextDepth;
       const total = roll + power + blessing;
       game.dungeon.depth = nextDepth;
 
@@ -395,11 +432,11 @@
       if (blessing > 0) outcome += ` (+${blessing} blessing)`;
       outcome += `, power ${power}, total ${total}.`;
 
-      if (roll === 1) {
-        const loss = hurtRandomAdventurer(3);
+      if (roll <= 2) {
+        const loss = hurtRandomAdventurer(4);
         addLog(`${outcome} A catastrophic trap springs. ${loss}`);
       } else if (total < threat) {
-        const loss = hurtRandomAdventurer(2);
+        const loss = hurtRandomAdventurer(nextDepth >= 4 ? 3 : 2);
         addLog(`${outcome} The denizens overwhelm you. ${loss}`);
       } else if (total < threat + 6) {
         const food = randomInt(1, 3);

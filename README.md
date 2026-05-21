@@ -12,5 +12,5 @@ Open `./index.html` in a browser.
 
 ## Gameplay Loop
 - **Room:** gather wood, stoke the fire, and build the first hut.
-- **Village:** manage wood/food/hide/iron/relics, grow the settlement, and train adventurers.
-- **Dungeon:** roll dice on each delve, take risks, and return with relics and iron.
+- **Village:** manage wood/food/hide/iron/relics, feed villagers and adventurers every few turns, grow the settlement, and train adventurers.
+- **Dungeon:** roll dice on each delve, face harsher scaling threats and traps, and return with relics and iron.
